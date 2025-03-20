@@ -3,13 +3,13 @@ import pandas as pd
 import io
 
 def main():
-    st.title("CSV Keyword Filter")
+    st.title("CSV & Excel Keyword Filter")
     
     # Instructions section
     with st.expander("📋 How to Use This App", expanded=True):
         st.markdown("""
         ### Instructions:
-        1. **Upload a CSV file** using the file uploader below
+        1. **Upload a file** (CSV or Excel) using the file uploader below
         2. **Select a column** from your data that you want to filter on
         3. **Enter keywords** separated by commas (e.g., apple,orange,banana)
         4. **Choose a filter method**:
@@ -24,14 +24,31 @@ def main():
     st.markdown("---")
     
     # File upload section
-    st.subheader("Step 1: Upload Your CSV File")
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+    st.subheader("Step 1: Upload Your File")
+    uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xlsx", "xls"])
     
     if uploaded_file is not None:
-        # Read the CSV file
+        # Read the file
         try:
-            df = pd.read_csv(uploaded_file)
-            st.success("✅ File successfully uploaded!")
+            # Determine file type and read accordingly
+            file_extension = uploaded_file.name.split('.')[-1].lower()
+            
+            if file_extension == 'csv':
+                df = pd.read_csv(uploaded_file)
+            elif file_extension in ['xlsx', 'xls']:
+                # For Excel files, let user select a sheet if there are multiple
+                with st.spinner("Reading Excel file..."):
+                    excel_file = pd.ExcelFile(uploaded_file)
+                    sheet_names = excel_file.sheet_names
+                    
+                    if len(sheet_names) > 1:
+                        selected_sheet = st.selectbox("Select a sheet:", sheet_names)
+                        df = pd.read_excel(uploaded_file, sheet_name=selected_sheet)
+                        st.success(f"✅ Loaded sheet: {selected_sheet}")
+                    else:
+                        df = pd.read_excel(uploaded_file)
+            
+            st.success(f"✅ File successfully uploaded: {uploaded_file.name}")
             
             # Display sample of the original dataframe
             st.subheader("Preview of Your Data")
@@ -94,23 +111,42 @@ def main():
                                 match_percentage = (len(filtered_df) / len(df)) * 100
                                 st.info(f"✅ Found {len(filtered_df)} rows matching your keywords ({match_percentage:.1f}% of your data)")
                                 
-                                # Download button for filtered data
+                                # Download options for filtered data
+                                st.subheader("Download Options")
+                                col1, col2 = st.columns(2)
+                                
+                                # CSV download
                                 csv = filtered_df.to_csv(index=False)
-                                st.download_button(
-                                    label="💾 Download filtered data as CSV",
-                                    data=csv,
-                                    file_name="filtered_data.csv",
-                                    mime="text/csv",
-                                    use_container_width=True
-                                )
+                                with col1:
+                                    st.download_button(
+                                        label="💾 Download as CSV",
+                                        data=csv,
+                                        file_name="filtered_data.csv",
+                                        mime="text/csv",
+                                        use_container_width=True
+                                    )
+                                
+                                # Excel download
+                                with col2:
+                                    buffer = io.BytesIO()
+                                    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                                        filtered_df.to_excel(writer, sheet_name='Filtered Data', index=False)
+                                    
+                                    st.download_button(
+                                        label="📊 Download as Excel",
+                                        data=buffer,
+                                        file_name="filtered_data.xlsx",
+                                        mime="application/vnd.ms-excel",
+                                        use_container_width=True
+                                    )
                             else:
                                 st.warning("No matching rows found. Try different keywords or another column.")
         
         except Exception as e:
             st.error(f"Error: {e}")
-            st.warning("Please make sure you've uploaded a valid CSV file.")
+            st.warning("Please make sure you've uploaded a valid file.")
     else:
-        st.info("👆 Please upload a CSV file to get started")
+        st.info("👆 Please upload a CSV or Excel file to get started")
 
 if __name__ == "__main__":
     main()
